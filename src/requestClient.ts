@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { logError, logInfo, logDebug } from './logger';
 
 export interface CreateRequestParams {
   action?: string;
@@ -38,31 +39,44 @@ function buildMeta(justification: string) {
 
 export async function createGuardRequest(p: CreateRequestParams): Promise<GuardResponse> {
   const base = getBaseUrl();
+  const url = `${base}/api/guard/request`;
   const body = {
     action: p.action || 'demo_action',
     params: p.params || {},
     meta: buildMeta(p.justification)
   };
-  const resp = await fetch(`${base}/api/guard/request`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Request failed ${resp.status}: ${text}`);
+  logInfo(`Creating approval request → ${url}`);
+  logDebug(`Payload: ${JSON.stringify(body)}`);
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    const hint = networkHint(base);
+    logError(`Network error creating request at ${url}`, err);
+    throw new Error(`network_error: fetch failed – ${hint}`);
   }
-  const data = await resp.json();
-  // Ensure token (if provided) is preserved; backend should include it on creation
-  if (typeof data.token === 'string') {
-    // pass through
+  if (!resp.ok) {
+    const text = await safeRead(resp);
+    logError(`HTTP ${resp.status} creating request`, text);
+    throw new Error(`http_error_${resp.status}: ${text}`);
+  }
+  let data: any;
+  try {
+    data = await resp.json();
+  } catch (err) {
+    logError('Failed to parse JSON response', err);
+    throw new Error('invalid_json_response');
   }
   if (p.wait) {
     try {
       const waited = await waitForTerminalState(base, data.requestId, 30_000);
       return waited;
-    } catch {
-      // fall through if wait fails
+    } catch (e) {
+      logDebug(`Wait for terminal state timed out or failed: ${e}`);
     }
   }
   return data;
@@ -71,14 +85,42 @@ export async function createGuardRequest(p: CreateRequestParams): Promise<GuardR
 async function waitForTerminalState(base: string, requestId: string, timeoutMs: number): Promise<GuardResponse> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    // NOTE: backend expects requestId param name (not id)
-    const status = await fetch(`${base}/api/guard/status?requestId=${encodeURIComponent(requestId)}`);
-    if (!status.ok) throw new Error(`Status poll failed: ${status.status}`);
-    const json = await status.json();
+    const statusUrl = `${base}/api/guard/status?requestId=${encodeURIComponent(requestId)}`;
+    let statusResp: Response;
+    try {
+      statusResp = await fetch(statusUrl);
+    } catch (err) {
+      logError(`Network error polling status for ${requestId}`, err);
+      await delay(1200);
+      continue;
+    }
+    if (!statusResp.ok) {
+      const text = await safeRead(statusResp);
+      logError(`Status poll HTTP ${statusResp.status}`, text);
+      await delay(1200);
+      continue;
+    }
+    let json: any;
+    try { json = await statusResp.json(); } catch { json = {}; }
     if (json.status === 'approved' || json.status === 'denied' || json.status === 'expired') {
       return json;
     }
-    await new Promise(r => setTimeout(r, 1200));
+    await delay(1200);
   }
-  throw new Error('Timed out waiting for terminal status');
+  throw new Error('wait_timeout');
+}
+
+function delay(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+async function safeRead(resp: Response): Promise<string> {
+  try { return await resp.text(); } catch { return '<unreadable body>'; }
+}
+
+function networkHint(base: string): string {
+  try {
+    const u = new URL(base);
+    return `unable to reach ${u.hostname}:${u.port || (u.protocol === 'https:' ? 443 : 80)} (server down? port mismatch? proxy/firewall?)`;
+  } catch {
+    return 'invalid baseUrl configuration';
+  }
 }

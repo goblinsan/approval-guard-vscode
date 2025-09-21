@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { createGuardRequest } from './requestClient';
 import { StatusPanel } from './ui/statusPanel';
 import { LiveStreamManager } from './liveStream';
+import { logInfo, logError } from './logger';
 
 export interface ApprovalGuardAPI {
   requestApproval(input: {
@@ -131,7 +132,26 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
     }
   });
 
-  context.subscriptions.push(createCmd, panelCmd, argsCmd);
+  const testCmd = vscode.commands.registerCommand('approvalGuard.testConnection', async () => {
+    const base = getBaseUrl();
+    const url = `${base}/api/guard/status?requestId=invalid-test`;
+    try {
+      const resp = await fetch(url, { method: 'GET' });
+      if (resp.ok || resp.status === 400 || resp.status === 404) {
+        logInfo(`Connectivity OK → ${base} (status ${resp.status})`);
+        vscode.window.showInformationMessage(`Approval Guard connectivity OK (${resp.status}).`);
+      } else {
+        const body = await resp.text();
+        logError(`Unexpected status ${resp.status} hitting test endpoint`, body);
+        vscode.window.showErrorMessage(`Approval Guard test got HTTP ${resp.status}`);
+      }
+    } catch (err) {
+      logError('Connectivity test failed', err);
+      vscode.window.showErrorMessage(`Approval Guard connectivity failed: ${(err as any).message || err}`);
+    }
+  });
+
+  context.subscriptions.push(createCmd, panelCmd, argsCmd, testCmd);
 
   const api: ApprovalGuardAPI = {
     requestApproval: async (input) => {

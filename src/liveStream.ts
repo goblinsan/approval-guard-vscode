@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { logDebug, logError, logInfo } from './logger';
 
 interface SSEStateEvent {
   status: string;
@@ -60,6 +61,7 @@ export class LiveStreamManager {
     if (!this.active) return;
     const { token, requestId, abort } = this.active;
     const url = `${this.baseUrl}/api/guard/wait-sse?token=${encodeURIComponent(token)}`;
+    logInfo(`SSE connect → ${url}`);
     try {
       const resp = await fetch(url, { signal: abort.signal, headers: { 'Accept': 'text/event-stream' } });
       if (!resp.ok || !resp.body) throw new Error(`sse_http_${resp.status}`);
@@ -81,9 +83,11 @@ export class LiveStreamManager {
       }
       // Stream ended naturally - if not terminal, schedule reconnect
       if (this.active && !this.active.terminal) {
+        logDebug('SSE stream ended (no terminal state) – scheduling reconnect');
         this.scheduleReconnect();
       }
     } catch (err) {
+      logError('SSE connection error', err);
       if (this.active && !this.active.terminal && !this.active.abort.signal.aborted) {
         this.scheduleReconnect();
       }
@@ -93,6 +97,7 @@ export class LiveStreamManager {
   private scheduleReconnect() {
     if (!this.active) return;
     const delay = this.active.backoff;
+    logDebug(`SSE reconnect in ${delay}ms (request ${this.active.requestId})`);
     this.active.backoff = Math.min(this.active.backoff * 2, 15000);
     setTimeout(() => this.connect(), delay);
   }
@@ -113,6 +118,6 @@ export class LiveStreamManager {
         if (this.active) this.active.terminal = true;
       }
       this.listener?.(normalized);
-    } catch {/* ignore parse errors */}
+    } catch (e) { logDebug(`Failed to parse SSE event chunk: ${e}`); }
   }
 }
