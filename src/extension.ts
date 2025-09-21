@@ -56,7 +56,11 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
       const justification = typeof maybeArgs.justification === 'string'
         ? maybeArgs.justification
         : (typeof maybeArgs.reason === 'string' ? maybeArgs.reason : undefined);
-      const { action, params, wait } = maybeArgs as any;
+      let { action, params, wait, scope } = maybeArgs as any;
+      // Derive action from scope if not explicitly passed
+      if (!action && typeof scope === 'string' && scope.trim()) {
+        action = `scope_${scope.trim()}`;
+      }
       if (typeof justification !== 'string' || justification.trim().length < 3) {
         throw new Error('invalid_justification: provide justification (>=3 chars)');
       }
@@ -91,6 +95,7 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
       let params: Record<string, unknown> | undefined;
       let justification: string | undefined;
       let wait: boolean | undefined;
+      let scope: string | undefined;
       if (typeof args === 'string') {
         justification = args; // treat as justification only
       } else if (args && typeof args === 'object') {
@@ -98,11 +103,15 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
         params = args.params;
         justification = args.justification;
         wait = args.wait;
+        scope = args.scope;
       } else if (args == null) {
         throw new Error('missing_args: provide an object or justification string');
       }
       if (!justification || typeof justification !== 'string' || justification.length < 3) {
         throw new Error('invalid_justification');
+      }
+      if (!action && typeof scope === 'string' && scope.trim()) {
+        action = `scope_${scope.trim()}`;
       }
       const result = await createGuardRequest({
         action: action || vscode.workspace.getConfiguration('approvalGuard').get<string>('defaultAction') || 'rerequest_demo',
@@ -176,13 +185,18 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
           }
         },
         run: async (input: any) => {
-          if (!input || typeof input.justification !== 'string') {
+          if (!input || (typeof input.justification !== 'string' && typeof input.reason !== 'string')) {
             throw new Error('justification_required');
           }
+            const justification = typeof input.justification === 'string' ? input.justification : input.reason;
+            let act = input.action;
+            if (!act && typeof input.scope === 'string' && input.scope.trim()) {
+              act = `scope_${input.scope.trim()}`;
+            }
             return api.requestApproval({
-              action: input.action,
+              action: act,
               params: input.params || {},
-              justification: input.justification,
+              justification,
               wait: input.wait
             });
         }

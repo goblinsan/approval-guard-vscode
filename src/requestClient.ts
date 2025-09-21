@@ -40,12 +40,13 @@ function buildMeta(justification: string) {
 export async function createGuardRequest(p: CreateRequestParams): Promise<GuardResponse> {
   const base = getBaseUrl();
   const url = `${base}/api/guard/request`;
+  const finalAction = p.action || 'demo_action';
   const body = {
-    action: p.action || 'demo_action',
+    action: finalAction,
     params: p.params || {},
     meta: buildMeta(p.justification)
   };
-  logInfo(`Creating approval request → ${url}`);
+  logInfo(`Creating approval request → ${url} (action=${finalAction})`);
   logDebug(`Payload: ${JSON.stringify(body)}`);
   let resp: Response;
   try {
