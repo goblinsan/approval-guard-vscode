@@ -3,8 +3,9 @@
 Lightweight client for interacting with an Approval Guard service from inside VS Code.
 
 ## Features (Initial Scaffold)
-- Command: `Approval Guard: Create Request` – prompts for a justification, creates a request against the configured service, optionally waits for a terminal status, then surfaces the result.
+- Command: `Approval Guard: Create Request` – prompts for a justification in interactive mode OR accepts an argument object (see Non-Interactive section) to run silently.
 - Command: `Approval Guard: Open Status Panel` – opens a simple webview panel that shows the most recent request's status.
+- Command: `Approval Guard: Create Request (Args)` – programmatic/agent oriented; accepts an argument object directly (no prompt) and returns the request result.
 - Programmatic API (other extensions can depend): exposes `requestApproval` and `getVersion` via `exports` from `activate`.
 
 ## Configuration
@@ -16,26 +17,76 @@ Lightweight client for interacting with an Approval Guard service from inside VS
 ## Usage
 1. Ensure the Approval Guard backend is running locally (defaults shown below) or configure `approvalGuard.baseUrl`.
 2. Open the command palette (`Ctrl/Cmd+Shift+P`) and run `Approval Guard: Create Request`.
-3. Enter a justification. The extension will POST to `/api/guard/request` and (by default) poll `/api/guard/status?id=...` until the request enters a terminal state (`approved`, `denied`, or `expired`).
+3. Enter a justification (if not supplied programmatically). The extension will POST to `/api/guard/request` and (by default) poll `/api/guard/status?requestId=...` until terminal state.
 4. Open `Approval Guard: Open Status Panel` to view the last request rendered in a webview.
 
-## Endpoints Used
-- `POST /api/guard/request` – creates a new approval request.
-- `GET /api/guard/status?id=<requestId>` – polls current status (used when waiting and in future updates to the panel).
-
-## Programmatic API
-Another extension can depend on this one and call:
+## Non-Interactive Invocation of Main Command
+You can bypass the input prompt by passing an argument object when executing the primary command:
 ```ts
-const api = vscode.extensions.getExtension('your-publisher.approval-guard')?.exports as ApprovalGuardAPI;
-const result = await api.requestApproval({ justification: 'Need to deploy', action: 'deploy_service' });
+await vscode.commands.executeCommand('approvalGuard.createRequest', {
+  action: 'scale_out',
+  params: { delta: 2 },
+  justification: 'Scale out for baseline load increase',
+  wait: true
+});
 ```
-Returned object mirrors backend JSON response (at minimum contains `requestId` and `status`).
+This is equivalent to using `approvalGuard.createRequestArgs`.
+
+## Agent / Copilot Usage
+There are two main ways for an agent to invoke an approval request:
+
+### 1. Invoke Args Command (or pass args to main command)
+```ts
+const result = await vscode.commands.executeCommand('approvalGuard.createRequestArgs', {
+  action: 'deploy_service',
+  params: { version: '1.2.3' },
+  justification: 'Deploying critical patch',
+  wait: true
+});
+```
+(or use `'approvalGuard.createRequest'` with the same argument object.)
+
+Returned object includes at least: `requestId`, `status`, optionally `expiresAt`, `policy` hints.
+
+### 2. Use the Exported API
+```ts
+const api = vscode.extensions.getExtension('your-publisher.approval-guard')?.exports as import('./dist/extension').ApprovalGuardAPI;
+const result = await api.requestApproval({
+  action: 'deploy_service',
+  params: { version: '1.2.3' },
+  justification: 'Deploying critical patch',
+  wait: true
+});
+```
+
+### Command Argument Schema
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `action` | string | No | Defaults to `approvalGuard.defaultAction` or `rerequest_demo`. |
+| `params` | object | No | Arbitrary key/value pairs. |
+| `justification` | string | Yes | At least 3 characters. |
+| `wait` | boolean | No | Defaults to true (waits for terminal state or until internal timeout). |
+
+### Error Handling
+Errors throw with messages like `invalid_justification` or backend `invalid_payload` details.
+
+## Endpoints Used
+- `POST /api/guard/request`
+- `GET /api/guard/status?requestId=<id>`
+
+## Programmatic API Summary
+```ts
+interface ApprovalGuardAPI {
+  requestApproval(input: { action?: string; params?: Record<string,unknown>; justification: string; wait?: boolean }): Promise<any>;
+  getVersion(): string;
+}
+```
 
 ## Roadmap (Next Iterations)
 - Live streaming updates via SSE endpoint (`/api/guard/wait-sse`).
 - Tree view of active & pending requests.
 - Multi-request history and persistence across reloads.
-- Inline approve/deny (if/when auth tokens & persona flows are exposed safely to the client).
+- Inline approve/deny (if/when safe token exposure path exists).
 - Metrics summary view.
 
 ## Development
@@ -49,10 +100,10 @@ Press `F5` in VS Code to launch the extension host.
 ```bash
 npm run package
 ```
-Produces a `.vsix` file you can install via the Extensions view (three-dot menu > Install from VSIX...).
+Produces a `.vsix` you can install via the Extensions view.
 
 ## Contributing
-Keep dependencies minimal (TypeScript only for now). Add tests as logic grows (e.g., HTTP client retry / parsing). Avoid embedding secrets in settings; prefer environment variables managed by the backend service.
+Keep dependencies minimal. Add tests as logic grows. Avoid embedding secrets in settings; rely on backend configuration.
 
 ## License
-MIT
+Apache-2.0

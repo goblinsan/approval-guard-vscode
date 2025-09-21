@@ -24,12 +24,23 @@ function getBaseUrl(): string {
   return 'http://localhost:3000';
 }
 
+function buildMeta(justification: string) {
+  // Minimal meta satisfying backend schema
+  // origin.repo required; branch optional
+  const repo = vscode.workspace.name || 'workspace';
+  return {
+    origin: { repo, branch: undefined },
+    requester: { id: 'vscode-user', source: 'agent', display: 'VS Code User' },
+    justification
+  };
+}
+
 export async function createGuardRequest(p: CreateRequestParams): Promise<GuardResponse> {
   const base = getBaseUrl();
   const body = {
     action: p.action || 'demo_action',
     params: p.params || {},
-    justification: p.justification
+    meta: buildMeta(p.justification)
   };
   const resp = await fetch(`${base}/api/guard/request`, {
     method: 'POST',
@@ -55,7 +66,8 @@ export async function createGuardRequest(p: CreateRequestParams): Promise<GuardR
 async function waitForTerminalState(base: string, requestId: string, timeoutMs: number): Promise<GuardResponse> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const status = await fetch(`${base}/api/guard/status?id=${encodeURIComponent(requestId)}`);
+    // NOTE: backend expects requestId param name (not id)
+    const status = await fetch(`${base}/api/guard/status?requestId=${encodeURIComponent(requestId)}`);
     if (!status.ok) throw new Error(`Status poll failed: ${status.status}`);
     const json = await status.json();
     if (json.status === 'approved' || json.status === 'denied' || json.status === 'expired') {

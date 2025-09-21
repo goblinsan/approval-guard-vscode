@@ -3,18 +3,24 @@
   "displayName": "Approval Guard",
   "publisher": "your-publisher",
   "version": "0.0.1",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-publisher/approval-guard-vscode.git"
+  },
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
   "activationEvents": [
     "onCommand:approvalGuard.createRequest",
-    "onCommand:approvalGuard.openStatusPanel"
+    "onCommand:approvalGuard.openStatusPanel",
+    "onCommand:approvalGuard.createRequestArgs"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       { "command": "approvalGuard.createRequest", "title": "Approval Guard: Create Request" },
-      { "command": "approvalGuard.openStatusPanel", "title": "Approval Guard: Open Status Panel" }
+      { "command": "approvalGuard.openStatusPanel", "title": "Approval Guard: Open Status Panel" },
+      { "command": "approvalGuard.createRequestArgs", "title": "Approval Guard: Create Request (Args)" }
     ],
     "configuration": {
       "title": "Approval Guard",
