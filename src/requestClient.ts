@@ -14,6 +14,7 @@ interface GuardResponse {
   denies?: any[];
   createdAt?: string;
   updatedAt?: string;
+  token?: string; // streaming token emitted by backend
   [k: string]: any;
 }
 
@@ -52,6 +53,10 @@ export async function createGuardRequest(p: CreateRequestParams): Promise<GuardR
     throw new Error(`Request failed ${resp.status}: ${text}`);
   }
   const data = await resp.json();
+  // Ensure token (if provided) is preserved; backend should include it on creation
+  if (typeof data.token === 'string') {
+    // pass through
+  }
   if (p.wait) {
     try {
       const waited = await waitForTerminalState(base, data.requestId, 30_000);

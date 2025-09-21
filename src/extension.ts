@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createGuardRequest } from './requestClient';
 import { StatusPanel } from './ui/statusPanel';
+import { LiveStreamManager } from './liveStream';
 
 export interface ApprovalGuardAPI {
   requestApproval(input: {
@@ -13,6 +14,29 @@ export interface ApprovalGuardAPI {
 }
 
 let statusPanel: StatusPanel | undefined;
+let streamManager: LiveStreamManager | undefined;
+const requestTokens = new Map<string,string>(); // requestId -> token
+
+function getBaseUrl(): string {
+  const cfg = vscode.workspace.getConfiguration('approvalGuard');
+  const fromCfg = cfg.get<string>('baseUrl');
+  return (fromCfg || 'http://localhost:3000').replace(/\/$/, '');
+}
+
+function ensureStreamManager(): LiveStreamManager {
+  if (!streamManager) {
+    streamManager = new LiveStreamManager(getBaseUrl());
+    streamManager.onState(ev => {
+      if (!statusPanel) return;
+      statusPanel.postLiveState(ev);
+      if (['approved','denied','expired'].includes(ev.status)) {
+        // terminal -> stop
+        streamManager?.stop();
+      }
+    });
+  }
+  return streamManager;
+}
 
 export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
   const createCmd = vscode.commands.registerCommand('approvalGuard.createRequest', async (maybeArgs?: any) => {
@@ -41,6 +65,11 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
         justification,
         wait: wait !== false // default true
       });
+      if (result.token) {
+        requestTokens.set(result.requestId, result.token);
+        const mgr = ensureStreamManager();
+        mgr.start(result.requestId, result.token);
+      }
       if (!maybeArgs) {
         vscode.window.showInformationMessage(`Approval request ${result.requestId} status: ${result.status}`);
       }
@@ -82,6 +111,11 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
         justification,
         wait: wait !== false
       });
+      if (result.token) {
+        requestTokens.set(result.requestId, result.token);
+        const mgr = ensureStreamManager();
+        mgr.start(result.requestId, result.token);
+      }
       statusPanel?.refreshFromResult(result);
       return result;
     } catch (e: any) {
@@ -93,13 +127,20 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
   context.subscriptions.push(createCmd, panelCmd, argsCmd);
 
   const api: ApprovalGuardAPI = {
-    requestApproval: (input) =>
-      createGuardRequest({
+    requestApproval: async (input) => {
+      const result = await createGuardRequest({
         action: input.action,
         params: input.params || {},
         justification: input.justification,
         wait: input.wait !== false
-      }),
+      });
+      if (result.token) {
+        requestTokens.set(result.requestId, result.token);
+        const mgr = ensureStreamManager();
+        mgr.start(result.requestId, result.token);
+      }
+      return result;
+    },
     getVersion: () => '0.0.1'
   };
 
