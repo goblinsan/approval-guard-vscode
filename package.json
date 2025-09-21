@@ -1,0 +1,49 @@
+{
+  "name": "approval-guard",
+  "displayName": "Approval Guard",
+  "publisher": "your-publisher",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:approvalGuard.createRequest",
+    "onCommand:approvalGuard.openStatusPanel"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "approvalGuard.createRequest", "title": "Approval Guard: Create Request" },
+      { "command": "approvalGuard.openStatusPanel", "title": "Approval Guard: Open Status Panel" }
+    ],
+    "configuration": {
+      "title": "Approval Guard",
+      "type": "object",
+      "properties": {
+        "approvalGuard.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "Base URL of the Approval Guard service."
+        },
+        "approvalGuard.defaultAction": {
+          "type": "string",
+          "default": "rerequest_demo",
+          "description": "Default action used when none specified."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "package": "vsce package",
+    "lint": "echo \"(Add ESLint config later)\"",
+    "prepublishOnly": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0",
+    "vsce": "^2.15.0"
+  }
+}
