@@ -49,43 +49,34 @@ function ensureStreamManager(): LiveStreamManager {
 export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
   const createCmd = vscode.commands.registerCommand('approvalGuard.createRequest', async (maybeArgs?: any) => {
     try {
-      let justification: string | undefined;
-      let action: string | undefined;
-      let params: Record<string, unknown> | undefined;
-      let wait: boolean | undefined;
-      if (maybeArgs && typeof maybeArgs === 'object') {
-        justification = maybeArgs.justification;
-        action = maybeArgs.action;
-        params = maybeArgs.params;
-        wait = maybeArgs.wait;
+      if (!maybeArgs || typeof maybeArgs !== 'object') {
+        throw new Error('justification_required: pass { justification: "..." } (or reason)');
       }
-      if (!justification) {
-        justification = await vscode.window.showInputBox({
-          prompt: 'Justification for this action (required)',
-          ignoreFocusOut: true
-        });
+      // Allow alias 'reason' as synonyms to integrate with languageModelTools definition
+      const justification = typeof maybeArgs.justification === 'string'
+        ? maybeArgs.justification
+        : (typeof maybeArgs.reason === 'string' ? maybeArgs.reason : undefined);
+      const { action, params, wait } = maybeArgs as any;
+      if (typeof justification !== 'string' || justification.trim().length < 3) {
+        throw new Error('invalid_justification: provide justification (>=3 chars)');
       }
-      if (!justification) return; // user cancelled
       const defaultAction = vscode.workspace.getConfiguration('approvalGuard').get<string>('defaultAction');
       const result = await createGuardRequest({
         action: action || defaultAction || 'rerequest_demo',
         params: params || {},
         justification,
-        wait: wait !== false // default true
+        wait: wait !== false
       });
       if (result.token) {
         requestTokens.set(result.requestId, result.token);
         const mgr = ensureStreamManager();
         mgr.start(result.requestId, result.token);
       }
-      if (!maybeArgs) {
-        vscode.window.showInformationMessage(`Approval request ${result.requestId} status: ${result.status}`);
-      }
       statusPanel?.refreshFromResult(result);
       return result;
     } catch (e: any) {
       vscode.window.showErrorMessage(`Approval Guard error: ${e.message || e}`);
-      if (maybeArgs) throw e;
+      throw e;
     }
   });
 
