@@ -2,7 +2,7 @@
   "name": "approval-guard",
   "displayName": "Approval Guard",
   "publisher": "47 Sunset Studios",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -24,32 +24,46 @@
       { "command": "approvalGuard.testConnection", "title": "Approval Guard: Test Connection" }
     ],
     "languageModelTools": [
-    {
-    "name": "approval_request",
-    "displayName": "Request Slack Approval",
-    "toolReferenceName": "approval",
-    "canBeReferencedInPrompt": true,
-    "modelDescription": "Request human approval in Slack and wait for the decision. Use BEFORE installing dependencies, running shell/Task commands, modifying many files, changing CI/CD or secrets, or touching workspace settings. Input: { reason: string, scope?: 'install'|'run'|'refactor'|'ci'|'secrets', labels?: string[] }",
-  "inputSchema": {
-    "type": "object",
-    "required": ["reason"],
-    "properties": {
-    "reason": { "type": "string", "description": "Short explanation of the action that needs approval." },
-    "action": { "type": "string", "description": "Explicit action identifier (overrides derived scope_*)" },
-    "scope":  {
-      "type": "string",
-      "enum": ["install", "run", "refactor", "ci", "secrets"],
-      "description": "Category of action for routing/visibility. If action omitted, final action becomes scope_<scope>."
-    },
-    "labels": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Optional labels/metadata for the approval request."
-    }
-    }
-  }
-}
-  ],
+      {
+        "name": "approval_request",
+        "displayName": "Request Slack Approval",
+        "toolReferenceName": "approval",
+        "canBeReferencedInPrompt": true,
+        "modelDescription": "Request human approval in Slack and wait for the decision. Use BEFORE installing dependencies, running shell/Task commands, modifying many files, changing CI/CD or secrets, or touching workspace settings. Input: { reason: string, scope?: 'install'|'run'|'refactor'|'ci'|'secrets', labels?: string[] }",
+        "inputSchema": {
+          "type": "object",
+          "required": ["reason"],
+          "properties": {
+            "reason": { "type": "string", "description": "Short explanation of the action that needs approval." },
+            "action": { "type": "string", "description": "Explicit action identifier (overrides derived scope_*)" },
+            "scope":  {
+              "type": "string",
+              "enum": ["install", "run", "refactor", "ci", "secrets"],
+              "description": "Category of action for routing/visibility. If action omitted, final action becomes scope_<scope>."
+            },
+            "labels": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Optional labels/metadata for the approval request."
+            }
+          }
+        }
+      },
+      {
+        "name": "approval_status",
+        "displayName": "Get Approval Status",
+        "toolReferenceName": "approvalStatus",
+        "canBeReferencedInPrompt": true,
+        "modelDescription": "Fetch current status of a prior approval request. Input: { requestId: string }",
+        "inputSchema": {
+          "type": "object",
+          "required": ["requestId"],
+          "properties": {
+            "requestId": { "type": "string", "description": "Previously returned requestId from approval tool." }
+          }
+        }
+      }
+    ],
     "configuration": {
       "title": "Approval Guard",
       "type": "object",

@@ -25,10 +25,30 @@ let statusPanel: StatusPanel | undefined;
 let streamManager: LiveStreamManager | undefined;
 const requestTokens = new Map<string,string>(); // requestId -> token
 
-function getBaseUrl(): string {
+function getBaseUrl(): string { // unify base URL logic
   const cfg = vscode.workspace.getConfiguration('approvalGuard');
   const fromCfg = cfg.get<string>('baseUrl');
   return (fromCfg || 'http://localhost:3000').replace(/\/$/, '');
+}
+
+function firstJustification(obj: any): string | undefined {
+  if (!obj || typeof obj !== 'object') return undefined;
+  const keys = ['justification','reason','rationale','explanation','message','why'];
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === 'string' && v.trim().length >= 3) return v.trim();
+  }
+  return undefined;
+}
+
+function slug(source: string): string {
+  return source.toLowerCase()
+    .replace(/[^a-z0-9\s_-]/g,'')
+    .trim()
+    .split(/\s+/)
+    .slice(0,5)
+    .join('_')
+    .slice(0,40);
 }
 
 function ensureStreamManager(): LiveStreamManager {
@@ -50,19 +70,19 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
   const createCmd = vscode.commands.registerCommand('approvalGuard.createRequest', async (maybeArgs?: any) => {
     try {
       if (!maybeArgs || typeof maybeArgs !== 'object') {
-        throw new Error('justification_required: pass { justification: "..." } (or reason)');
+        throw new Error('justification_required: provide one of justification|reason|rationale|explanation|message|why');
       }
-      // Allow alias 'reason' as synonyms to integrate with languageModelTools definition
-      const justification = typeof maybeArgs.justification === 'string'
-        ? maybeArgs.justification
-        : (typeof maybeArgs.reason === 'string' ? maybeArgs.reason : undefined);
       let { action, params, wait, scope } = maybeArgs as any;
-      // Derive action from scope if not explicitly passed
-      if (!action && typeof scope === 'string' && scope.trim()) {
-        action = `scope_${scope.trim()}`;
+      const justification = firstJustification(maybeArgs);
+      if (!justification) {
+        logError('Approval Guard missing justification in createRequest', new Error(JSON.stringify(Object.keys(maybeArgs))));
+        throw new Error(`justification_required: received keys: ${Object.keys(maybeArgs).join(',')}`);
       }
-      if (typeof justification !== 'string' || justification.trim().length < 3) {
-        throw new Error('invalid_justification: provide justification (>=3 chars)');
+      if (!action && typeof scope === 'string' && scope.trim()) {
+        action = `scope_${slug(scope.trim())}`;
+      }
+      if (!action) {
+        action = `auto_${slug(justification)}`;
       }
       const defaultAction = vscode.workspace.getConfiguration('approvalGuard').get<string>('defaultAction');
       const result = await createGuardRequest({
@@ -93,25 +113,29 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
     try {
       let action: string | undefined;
       let params: Record<string, unknown> | undefined;
-      let justification: string | undefined;
       let wait: boolean | undefined;
       let scope: string | undefined;
+      let justification: string | undefined;
       if (typeof args === 'string') {
         justification = args; // treat as justification only
       } else if (args && typeof args === 'object') {
         action = args.action;
         params = args.params;
-        justification = args.justification;
         wait = args.wait;
         scope = args.scope;
+        justification = firstJustification(args);
       } else if (args == null) {
         throw new Error('missing_args: provide an object or justification string');
       }
       if (!justification || typeof justification !== 'string' || justification.length < 3) {
+        logError('Approval Guard invalid or missing justification in createRequestArgs', new Error(JSON.stringify(Object.keys(args || {}))));
         throw new Error('invalid_justification');
       }
       if (!action && typeof scope === 'string' && scope.trim()) {
-        action = `scope_${scope.trim()}`;
+        action = `scope_${slug(scope.trim())}`;
+      }
+      if (!action) {
+        action = `auto_${slug(justification)}`;
       }
       const result = await createGuardRequest({
         action: action || vscode.workspace.getConfiguration('approvalGuard').get<string>('defaultAction') || 'rerequest_demo',
@@ -185,24 +209,56 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
           }
         },
         run: async (input: any) => {
-          if (!input || (typeof input.justification !== 'string' && typeof input.reason !== 'string')) {
-            throw new Error('justification_required');
+          const justification = firstJustification(input);
+          if (!justification) {
+            logError('Approval Guard missing justification in tool run (approval)', new Error(JSON.stringify(Object.keys(input || {}))));
+            throw new Error(`justification_required: received keys: ${Object.keys(input || {}).join(',')}`);
           }
-            const justification = typeof input.justification === 'string' ? input.justification : input.reason;
-            let act = input.action;
-            if (!act && typeof input.scope === 'string' && input.scope.trim()) {
-              act = `scope_${input.scope.trim()}`;
-            }
-            return api.requestApproval({
-              action: act,
-              params: input.params || {},
-              justification,
-              wait: input.wait
-            });
+          let act = input.action;
+          if (!act && typeof input.scope === 'string' && input.scope.trim()) {
+            act = `scope_${slug(input.scope.trim())}`;
+          }
+          if (!act) {
+            act = `auto_${slug(justification)}`;
+          }
+          return api.requestApproval({
+            action: act,
+            params: input.params || {},
+            justification,
+            wait: input.wait
+          });
         }
       }
     ]
   };
+
+  const statusTool = {
+    toolReferenceName: 'approvalStatus',
+    name: 'Approval Guard Status',
+    description: 'Retrieve current status for an approval request by requestId.',
+    inputSchema: {
+      type: 'object',
+      required: ['requestId'],
+      properties: {
+        requestId: { type: 'string', description: 'The approval request identifier.' }
+      }
+    },
+    run: async (input: any) => {
+      if (!input || typeof input.requestId !== 'string') {
+        throw new Error('requestId_required');
+      }
+      const base = getBaseUrl();
+      const resp = await fetch(`${base}/api/guard/status?requestId=${encodeURIComponent(input.requestId)}`);
+      if (!resp.ok) {
+        throw new Error(`status_http_${resp.status}`);
+      }
+      return resp.json();
+    }
+  };
+
+  if (api.tools) {
+    api.tools.push(statusTool as any);
+  }
 
   return api;
 }
