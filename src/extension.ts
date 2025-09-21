@@ -11,6 +11,13 @@ export interface ApprovalGuardAPI {
     wait?: boolean;
   }): Promise<any>;
   getVersion(): string;
+  tools?: Array<{
+    toolReferenceName: string;
+    name: string;
+    description: string;
+    inputSchema: Record<string, any>;
+    run: (input: any) => Promise<any>;
+  }>;
 }
 
 let statusPanel: StatusPanel | undefined;
@@ -141,7 +148,35 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
       }
       return result;
     },
-    getVersion: () => '0.0.1'
+    getVersion: () => '0.0.1',
+    tools: [
+      {
+        toolReferenceName: 'approval',
+        name: 'Approval Guard Request',
+        description: 'Create an approval request. Provide justification and optional action/params. Returns requestId and initial status.',
+        inputSchema: {
+          type: 'object',
+          required: ['justification'],
+          properties: {
+            justification: { type: 'string', description: 'Why the action is needed.' },
+            action: { type: 'string', description: 'Action identifier.' },
+            params: { type: 'object', description: 'Structured parameters for the action.' },
+            wait: { type: 'boolean', description: 'If true (default), waits briefly for terminal state.' }
+          }
+        },
+        run: async (input: any) => {
+          if (!input || typeof input.justification !== 'string') {
+            throw new Error('justification_required');
+          }
+            return api.requestApproval({
+              action: input.action,
+              params: input.params || {},
+              justification: input.justification,
+              wait: input.wait
+            });
+        }
+      }
+    ]
   };
 
   return api;

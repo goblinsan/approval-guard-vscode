@@ -82,6 +82,63 @@ interface ApprovalGuardAPI {
 }
 ```
 
+## Language Model Tool Integration (#approval)
+
+The extension now exposes a lightweight Language Model Tool descriptor (experimental) so prompting systems that scan `exports.tools` can auto-discover an `approval` tool. This enables prompt hints like `#approval` to nudge selection.
+
+Tool metadata:
+```jsonc
+{
+  "toolReferenceName": "approval",
+  "name": "Approval Guard Request",
+  "description": "Create an approval request. Provide justification and optional action/params.",
+  "inputSchema": {
+    "type": "object",
+    "required": ["justification"],
+    "properties": {
+      "justification": { "type": "string" },
+      "action": { "type": "string" },
+      "params": { "type": "object" },
+      "wait": { "type": "boolean" }
+    }
+  }
+}
+```
+
+### Example Prompt Snippets
+```
+Please request deployment approval for version 2.4.1 #approval
+```
+
+Underlying tool call (conceptual):
+```json
+{
+  "tool": "approval",
+  "input": {
+    "action": "deploy_service",
+    "params": { "version": "2.4.1" },
+    "justification": "Roll out security patch",
+    "wait": true
+  }
+}
+```
+
+If the orchestrator doesn’t auto-detect tools, it can still call:
+```ts
+const api = vscode.extensions.getExtension('your-publisher.approval-guard')!.exports;
+await api.tools.find(t => t.toolReferenceName === 'approval').run({
+  action: 'scale_out',
+  params: { delta: 3 },
+  justification: 'Traffic spike mitigation',
+  wait: true
+});
+```
+
+### Notes
+* `wait` defaults to true if omitted.
+* Streaming updates (SSE) still appear in the status panel automatically.
+* Future: tool may emit intermediate events when multi-step flows (personas) are enabled.
+
 ## Roadmap (Next Iterations)
 - Live streaming updates via SSE endpoint (`/api/guard/wait-sse`).
 - Tree view of active & pending requests.
