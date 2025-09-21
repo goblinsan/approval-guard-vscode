@@ -32,11 +32,18 @@ function getBaseUrl(): string { // unify base URL logic
 }
 
 function firstJustification(obj: any): string | undefined {
-  if (!obj || typeof obj !== 'object') return undefined;
-  const keys = ['justification','reason','rationale','explanation','message','why'];
-  for (const k of keys) {
-    const v = obj[k];
-    if (typeof v === 'string' && v.trim().length >= 3) return v.trim();
+  if (obj == null) return undefined;
+  if (typeof obj === 'string') {
+    const t = obj.trim();
+    return t.length >= 3 ? t : undefined;
+  }
+  if (typeof obj !== 'object') return undefined;
+  const aliasSet = new Set(['justification','reason','rationale','explanation','message','why','reasoning']);
+  for (const [k, v] of Object.entries(obj)) {
+    if (aliasSet.has(k.toLowerCase()) && typeof v === 'string') {
+      const t = v.trim();
+      if (t.length >= 3) return t;
+    }
   }
   return undefined;
 }
@@ -69,14 +76,23 @@ function ensureStreamManager(): LiveStreamManager {
 export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
   const createCmd = vscode.commands.registerCommand('approvalGuard.createRequest', async (maybeArgs?: any) => {
     try {
-      if (!maybeArgs || typeof maybeArgs !== 'object') {
-        throw new Error('justification_required: provide one of justification|reason|rationale|explanation|message|why');
+      let action: string | undefined;
+      let params: any = {};
+      let wait: any;
+      let scope: string | undefined;
+      let justification: string | undefined;
+      if (typeof maybeArgs === 'string') {
+        justification = firstJustification(maybeArgs);
+      } else if (maybeArgs && typeof maybeArgs === 'object') {
+        ({ action, params, wait, scope } = maybeArgs as any);
+        justification = firstJustification(maybeArgs);
+      } else {
+        throw new Error('justification_required: provide justification string or object with one of justification|reason|rationale|explanation|message|why');
       }
-      let { action, params, wait, scope } = maybeArgs as any;
-      const justification = firstJustification(maybeArgs);
       if (!justification) {
-        logError('Approval Guard missing justification in createRequest', new Error(JSON.stringify(Object.keys(maybeArgs))));
-        throw new Error(`justification_required: received keys: ${Object.keys(maybeArgs).join(',')}`);
+        const keys = typeof maybeArgs === 'object' ? Object.keys(maybeArgs).join(',') : typeof maybeArgs;
+        logError('Approval Guard missing justification in createRequest', new Error(keys));
+        throw new Error(`justification_required: received keys/type: ${keys}`);
       }
       if (!action && typeof scope === 'string' && scope.trim()) {
         action = `scope_${slug(scope.trim())}`;

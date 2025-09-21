@@ -63,6 +63,9 @@ export async function createGuardRequest(p: CreateRequestParams): Promise<GuardR
   if (!resp.ok) {
     const text = await safeRead(resp);
     logError(`HTTP ${resp.status} creating request`, text);
+    if (resp.status === 403 && /policy_denied/i.test(text)) {
+      throw new Error(`http_error_403: ${text} – action may not satisfy allowlist or requester lacks permission`);
+    }
     throw new Error(`http_error_${resp.status}: ${text}`);
   }
   let data: any;
