@@ -32,7 +32,7 @@ function buildMeta(justification: string) {
   const repo = vscode.workspace.name || 'vscode-workspace';
   return {
     origin: { repo, branch: undefined },
-    requester: { id: 'U09FUBQF3AB', source: 'vscode', display: 'VS Code Extension' },
+    requester: { id: 'U09FUBQF3AB', source: 'agent', display: 'VS Code Extension' },
     justification
   };
 }
