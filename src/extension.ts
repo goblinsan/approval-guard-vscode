@@ -94,10 +94,15 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
         logError('Approval Guard missing justification in createRequest', new Error(keys));
         throw new Error(`justification_required: received keys/type: ${keys}`);
       }
+      const cfg = vscode.workspace.getConfiguration('approvalGuard');
+      const disableAuto = cfg.get<boolean>('disableAutoAction');
       if (!action && typeof scope === 'string' && scope.trim()) {
         action = `scope_${slug(scope.trim())}`;
       }
       if (!action) {
+        if (disableAuto) {
+          throw new Error('action_required: auto-derivation disabled (set approvalGuard.disableAutoAction=false or provide action/scope)');
+        }
         action = `auto_${slug(justification)}`;
       }
       const defaultAction = vscode.workspace.getConfiguration('approvalGuard').get<string>('defaultAction');
@@ -147,10 +152,15 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
         logError('Approval Guard invalid or missing justification in createRequestArgs', new Error(JSON.stringify(Object.keys(args || {}))));
         throw new Error('invalid_justification');
       }
+      const cfg2 = vscode.workspace.getConfiguration('approvalGuard');
+      const disableAuto2 = cfg2.get<boolean>('disableAutoAction');
       if (!action && typeof scope === 'string' && scope.trim()) {
         action = `scope_${slug(scope.trim())}`;
       }
       if (!action) {
+        if (disableAuto2) {
+          throw new Error('action_required: auto-derivation disabled (set approvalGuard.disableAutoAction=false or provide action/scope)');
+        }
         action = `auto_${slug(justification)}`;
       }
       const result = await createGuardRequest({
@@ -231,10 +241,15 @@ export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
             throw new Error(`justification_required: received keys: ${Object.keys(input || {}).join(',')}`);
           }
           let act = input.action;
+          const cfg3 = vscode.workspace.getConfiguration('approvalGuard');
+          const disableAuto3 = cfg3.get<boolean>('disableAutoAction');
           if (!act && typeof input.scope === 'string' && input.scope.trim()) {
             act = `scope_${slug(input.scope.trim())}`;
           }
           if (!act) {
+            if (disableAuto3) {
+              throw new Error('action_required: auto-derivation disabled (set approvalGuard.disableAutoAction=false or provide action/scope)');
+            }
             act = `auto_${slug(justification)}`;
           }
           return api.requestApproval({

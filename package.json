@@ -2,7 +2,7 @@
   "name": "approval-guard",
   "displayName": "Approval Guard",
   "publisher": "47 Sunset Studios",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -82,6 +82,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable verbose debug logging to the Approval Guard output channel."
+        },
+        "approvalGuard.disableAutoAction": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, do NOT derive scope_* or auto_* actions; require explicit action or scope. Helps avoid policy_denied from unexpected slugs." 
         }
       }
     }
