@@ -28,7 +28,7 @@ const requestTokens = new Map<string,string>(); // requestId -> token
 function getBaseUrl(): string { // unify base URL logic
   const cfg = vscode.workspace.getConfiguration('approvalGuard');
   const fromCfg = cfg.get<string>('baseUrl');
-  return (fromCfg || 'http://localhost:3000').replace(/\/$/, '');
+  return (fromCfg || 'http://localhost:8080').replace(/\/$/, '');
 }
 
 function firstJustification(obj: any): string | undefined {
@@ -74,6 +74,8 @@ function ensureStreamManager(): LiveStreamManager {
 }
 
 export function activate(context: vscode.ExtensionContext): ApprovalGuardAPI {
+  const effectiveBase = getBaseUrl();
+  logInfo(`Approval Guard extension activated (baseUrl=${effectiveBase})`);
   const createCmd = vscode.commands.registerCommand('approvalGuard.createRequest', async (maybeArgs?: any) => {
     try {
       let action: string | undefined;

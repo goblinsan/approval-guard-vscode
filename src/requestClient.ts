@@ -23,7 +23,7 @@ function getBaseUrl(): string {
   const cfg = vscode.workspace.getConfiguration('approvalGuard');
   const fromCfg = cfg.get<string>('baseUrl');
   if (fromCfg) return fromCfg.replace(/\/$/, '');
-  return 'http://localhost:3000';
+  return 'http://localhost:8080';
 }
 
 function buildMeta(justification: string) {
