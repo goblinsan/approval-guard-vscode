@@ -27,12 +27,12 @@ function getBaseUrl(): string {
 }
 
 function buildMeta(justification: string) {
-  // Minimal meta satisfying backend schema
-  // origin.repo required; branch optional
-  const repo = vscode.workspace.name || 'workspace';
+  // Meta structure matching backend expectation
+  // Use Slack user ID format for requester to match policy expectations
+  const repo = vscode.workspace.name || 'vscode-workspace';
   return {
     origin: { repo, branch: undefined },
-    requester: { id: 'vscode-user', source: 'agent', display: 'VS Code User' },
+    requester: { id: 'U09FUBQF3AB', source: 'vscode', display: 'VS Code Extension' },
     justification
   };
 }

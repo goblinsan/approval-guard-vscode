@@ -2,7 +2,7 @@
   "name": "approval-guard",
   "displayName": "Approval Guard",
   "publisher": "47 Sunset Studios",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -29,23 +29,18 @@
         "displayName": "Request Slack Approval",
         "toolReferenceName": "approval",
         "canBeReferencedInPrompt": true,
-        "modelDescription": "Request human approval in Slack and wait for the decision. Use BEFORE installing dependencies, running shell/Task commands, modifying many files, changing CI/CD or secrets, or touching workspace settings. Input: { reason: string, scope?: 'install'|'run'|'refactor'|'ci'|'secrets', labels?: string[] }",
+        "modelDescription": "Request human approval in Slack and wait for the decision. MUST provide action field with valid policy action (demo, npm_install, run_migration, update_config, rotate_secret, rerequest_demo). Use BEFORE risky operations. Input: { reason: string, action: 'demo'|'npm_install'|etc }",
         "inputSchema": {
           "type": "object",
-          "required": ["reason"],
+          "required": ["reason", "action"],
           "properties": {
-            "reason": { "type": "string", "description": "Short explanation of the action that needs approval." },
-            "action": { "type": "string", "description": "Explicit action identifier (overrides derived scope_*)" },
-            "scope":  {
-              "type": "string",
-              "enum": ["install", "run", "refactor", "ci", "secrets"],
-              "description": "Category of action for routing/visibility. If action omitted, final action becomes scope_<scope>."
+            "reason": { "type": "string", "description": "Short explanation of why approval is needed." },
+            "action": { 
+              "type": "string", 
+              "enum": ["demo", "npm_install", "run_migration", "update_config", "rotate_secret", "rerequest_demo"],
+              "description": "Explicit action from policy (REQUIRED). Use 'demo' for testing, 'npm_install' for package installs, etc." 
             },
-            "labels": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Optional labels/metadata for the approval request."
-            }
+            "params": { "type": "object", "description": "Optional structured parameters for the action." }
           }
         }
       },
@@ -85,7 +80,7 @@
         },
         "approvalGuard.disableAutoAction": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "If true, do NOT derive scope_* or auto_* actions; require explicit action or scope. Helps avoid policy_denied from unexpected slugs." 
         }
       }
